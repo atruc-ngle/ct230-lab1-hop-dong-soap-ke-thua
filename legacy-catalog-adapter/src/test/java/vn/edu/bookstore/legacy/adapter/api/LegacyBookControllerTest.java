@@ -1,5 +1,6 @@
 package vn.edu.bookstore.legacy.adapter.api;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,7 +17,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import vn.edu.bookstore.legacy.adapter.LegacySoapTestServer;
 
-/** Kiểm thử tích hợp adapter ↔ dịch vụ SOAP kế thừa thật (chạy trong JVM kiểm thử). */
 @SpringBootTest
 @AutoConfigureMockMvc
 class LegacyBookControllerTest {
@@ -47,8 +47,53 @@ class LegacyBookControllerTest {
                 .andExpect(jsonPath("$.source").value("legacy-soap"));
     }
 
-    // TODO(TH1-8): viết ca kiểm thử cho các nhánh lỗi:
-    //   9789999999999 → 404 book-not-found; "12345" → 400 validation-failed;
-    //   9790000000000 → 502 upstream-unavailable; tìm kiếm "micro" → 2 kết quả; q="a" → 400.
-    //   Thêm lớp kiểm thử riêng cho hệ thống kế thừa chậm (504) và tắt (503).
+    @Test
+    void sachKhongTonTaiTraVe404() throws Exception {
+        mvc.perform(get("/api/v1/legacy/books/9789999999999"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.valueOf("application/problem+json")))
+                .andExpect(jsonPath("$.type").value(
+                        "https://api.bookstore.vn/problems/book-not-found"))
+                .andExpect(jsonPath("$.legacyCode").value("BOOK_NOT_FOUND"));
+    }
+
+    @Test
+    void isbnKhongHopLeTraVe400() throws Exception {
+        mvc.perform(get("/api/v1/legacy/books/12345"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.valueOf("application/problem+json")))
+                .andExpect(jsonPath("$.type").value(
+                        "https://api.bookstore.vn/problems/validation-failed"));
+    }
+
+    @Test
+    void soapFaultKhongDuocNhanDienTraVe502() throws Exception {
+        mvc.perform(get("/api/v1/legacy/books/9790000000000"))
+                .andExpect(status().isBadGateway())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.valueOf("application/problem+json")))
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.legacyCode").value("BACKEND_ERROR"));
+    }
+
+    @Test
+    void timKiemMicroTraVeHaiKetQua() throws Exception {
+        mvc.perform(get("/api/v1/legacy/books")
+                        .param("q", "micro"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    void tuKhoaQuaNganTraVe400() throws Exception {
+        mvc.perform(get("/api/v1/legacy/books")
+                        .param("q", "a"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.valueOf("application/problem+json")))
+                .andExpect(jsonPath("$.type").value(
+                        "https://api.bookstore.vn/problems/validation-failed"));
+    }
 }

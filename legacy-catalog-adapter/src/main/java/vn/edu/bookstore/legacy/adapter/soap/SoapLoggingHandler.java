@@ -1,5 +1,10 @@
 package vn.edu.bookstore.legacy.adapter.soap;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+import jakarta.xml.soap.SOAPException;
 import jakarta.xml.ws.handler.MessageContext;
 import jakarta.xml.ws.handler.soap.SOAPHandler;
 import jakarta.xml.ws.handler.soap.SOAPMessageContext;
@@ -28,16 +33,35 @@ public class SoapLoggingHandler implements SOAPHandler<SOAPMessageContext> {
         return true;
     }
 
-    private void log(SOAPMessageContext context, boolean fault) {
-        // TODO(TH1-5): đọc MessageContext.MESSAGE_OUTBOUND_PROPERTY để biết chiều gửi/nhận,
-        //   ghi context.getMessage() ra ByteArrayOutputStream (writeTo) rồi LOG.info(...)
-        LOG.debug("SoapLoggingHandler chưa được hiện thực (fault={})", fault);
+private void log(SOAPMessageContext context, boolean fault) {
+    boolean outbound = Boolean.TRUE.equals(
+            context.get(MessageContext.MESSAGE_OUTBOUND_PROPERTY)
+    );
+
+    try {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        context.getMessage().writeTo(out);
+
+        LOG.info(
+                "SOAP {}{}:\n{}",
+                outbound ? "→ gửi" : "← nhận",
+                fault ? " (Fault)" : "",
+                out.toString(StandardCharsets.UTF_8)
+        );
+    } catch (SOAPException | IOException e) {
+        LOG.warn(
+                "Không ghi được log thông điệp SOAP: {}",
+                e.getMessage()
+        );
     }
+}
 
     @Override
     public Set<QName> getHeaders() {
         return Set.of();
     }
+
 
     @Override
     public void close(MessageContext context) {
